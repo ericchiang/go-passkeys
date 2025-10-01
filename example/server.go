@@ -224,6 +224,7 @@ func (s *server) handleIndex(w http.ResponseWriter, r *http.Request) {
 			CreatedAt         int64
 			BackedUp          bool
 			Transports        []string
+			Format            string
 		}
 		var passkeys []userPasskeys
 		for _, pk := range u.passkeys {
@@ -248,6 +249,7 @@ func (s *server) handleIndex(w http.ResponseWriter, r *http.Request) {
 				AttestationFormat: format,
 				AttestationObject: base64.StdEncoding.EncodeToString(pk.attestationObject),
 				Transports:        pk.transports,
+				Format:            pk.format,
 			}
 			passkeys = append(passkeys, p)
 		}
@@ -449,6 +451,11 @@ func (s *server) handleRegistrationFinish(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	format, err := webauthn.AttestationFormat(req.AttestationObject)
+	if err != nil {
+		http.Error(w, "Parsing attestation format: "+err.Error(), http.StatusBadRequest)
+		return
+	}
 	authData, err := s.rp.VerifyAttestation(reg.challenge, req.ClientDataJSON, req.AttestationObject)
 	if err != nil {
 		http.Error(w, "Failed to verify attestation: "+err.Error(), http.StatusBadRequest)
@@ -471,6 +478,7 @@ func (s *server) handleRegistrationFinish(w http.ResponseWriter, r *http.Request
 		transports:        req.Transports,
 		attestationObject: req.AttestationObject,
 		clientDataJSON:    req.ClientDataJSON,
+		format:            format,
 	}
 	u := &user{
 		username: reg.username,

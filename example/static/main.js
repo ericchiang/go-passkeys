@@ -132,8 +132,8 @@ window.appRegister = async function() {
                 clientDataJSON: clientDataJSON,
             }),
         });
-        if (!resp.ok) {
-            err(await resp.text());
+        if (!finishResp.ok) {
+            err(await finishResp.text());
             return;
         }
 		window.location.herf = "/";
@@ -219,6 +219,14 @@ window.appReauth = async function() {
 				  transports: el.getAttribute("data-transport").split(/[ ,]+/).filter((s) => s !== ''),
 				};
 			});
+        const excludeCredentials = Array.from(document.getElementsByClassName("reauth-key-id")).
+			filter((el) => !el.checked).
+			map((el) => {
+                return {
+				  id: Uint8Array.from(atob(el.getAttribute("value")), c => c.charCodeAt(0)),
+  			      type: "public-key",
+				};
+			});
 
 		const opts = {
 		   hints: hints,
@@ -227,9 +235,10 @@ window.appReauth = async function() {
                rpId: "localhost",
                userVerification: "required",
 			   allowcredentials: creds,
+               excludeCredentials: excludeCredentials,
 		   },
 		};
-		console.log(opts);
+        console.log(opts);
 
 		const cred = await navigator.credentials.get(opts);
 
@@ -279,7 +288,6 @@ window.appRegisterKey = async function() {
 
         const body = await resp.json();
         const challenge = Uint8Array.from(atob(body.challenge), c => c.charCodeAt(0));
-        const credID = Uint8Array.from(atob(body.credentialID), c => c.charCodeAt(0));
         const userID = Uint8Array.from(atob(body.userID), c => c.charCodeAt(0));
 		const creds = body.credentialIDs.map((credID) => {
 			return {
@@ -341,8 +349,8 @@ window.appRegisterKey = async function() {
                 clientDataJSON: clientDataJSON,
             }),
         });
-        if (!resp.ok) {
-            err(await resp.text());
+        if (!finishResp.ok) {
+            err(await finishResp.text());
             return;
         }
 		window.location.herf = "/";

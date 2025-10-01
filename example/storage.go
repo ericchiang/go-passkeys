@@ -46,6 +46,9 @@ CREATE TABLE IF NOT EXISTS passkeys (
 	attestation_object BLOB NOT NULL,
     client_data_json   BLOB NOT NULL,
 
+	-- Format of the attestation object.
+	attestation_format STRING NOT NULL,
+
 	PRIMARY KEY(user_handle),
 	FOREIGN KEY(username) REFERENCES users(username),
 	UNIQUE(user_handle)
@@ -214,6 +217,7 @@ type passkey struct {
 	publicKey  crypto.PublicKey
 	algorithm  webauthn.Algorithm
 	transports []string
+	format     string
 
 	attestationObject []byte
 	clientDataJSON    []byte
@@ -246,11 +250,13 @@ func (s *storage) insertUser(ctx context.Context, u *user) error {
 			INSERT INTO passkeys
 			(username, name, passkey_id, user_handle, created_at,
 			public_key, algorithm, transports,
-			attestation_object, client_data_json)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			attestation_object, client_data_json, attestation_format)
+			VALUES (?, ?, ?, ?, ?,
+			?, ?, ?,
+			?, ?, ?)
 		`, p.username, p.name, p.passkeyID, p.userHandle, p.createdAt.UnixMicro(),
 			pub, int64(p.algorithm), transports,
-			p.attestationObject, p.clientDataJSON); err != nil {
+			p.attestationObject, p.clientDataJSON, p.format); err != nil {
 			return fmt.Errorf("inserting passkey: %v", err)
 		}
 	}
@@ -274,11 +280,12 @@ func (s *storage) insertPasskey(ctx context.Context, p *passkey) error {
 			INSERT INTO passkeys
 			(username, name, passkey_id, user_handle, created_at,
 			public_key, algorithm, transports,
-			attestation_object, client_data_json)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			attestation_object, client_data_json,
+			attestation_format)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`, p.username, p.name, p.passkeyID, p.userHandle, p.createdAt.UnixMicro(),
 		pub, int64(p.algorithm), transports,
-		p.attestationObject, p.clientDataJSON); err != nil {
+		p.attestationObject, p.clientDataJSON, p.format); err != nil {
 		return fmt.Errorf("inserting passkey: %v", err)
 	}
 	return nil
@@ -356,15 +363,17 @@ func (s *storage) getPasskey(ctx context.Context, userHandle []byte) (*passkey, 
 		transports []byte
 		alg        int64
 		createdAt  int64
+		format     sql.NullString
 	)
 	err := s.db.QueryRowContext(ctx, `
 		SELECT
 		username, name, passkey_id, created_at,
 		public_key, algorithm, transports,
-		attestation_object, client_data_json
+		attestation_object, client_data_json,
+		attestation_format
 		FROM passkeys
 		WHERE user_handle = ?`, userHandle).
-		Scan(&p.username, &p.name, &p.passkeyID, &createdAt, &pubDER, &alg, &transports, &p.attestationObject, &p.clientDataJSON)
+		Scan(&p.username, &p.name, &p.passkeyID, &createdAt, &pubDER, &alg, &transports, &p.attestationObject, &p.clientDataJSON, &p.format)
 	if err != nil {
 		return nil, fmt.Errorf("scanning passkey row: %v", err)
 	}
@@ -378,6 +387,7 @@ func (s *storage) getPasskey(ctx context.Context, userHandle []byte) (*passkey, 
 	p.publicKey = pub
 	p.algorithm = webauthn.Algorithm(alg)
 	p.createdAt = time.UnixMicro(createdAt)
+	p.format = format.String
 	return p, nil
 }
 
